@@ -6,10 +6,18 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../generated/prisma"
 }
 
 datasource db {
   provider = "mongodb"
   url      = env("DATABASE_URL")
+}
+
+model WeatherData {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  deviceId    String   // ID do dispositivo/estação que enviou os dados
+  temperature Float    // Temperatura em Celsius
+  humidity    Float    // Umidade relativa (%)
+  pressure    Float    // Pressão atmosférica (hPa)
+  timestamp   DateTime @default(now()) // 
 }
