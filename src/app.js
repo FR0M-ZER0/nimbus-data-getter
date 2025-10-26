@@ -1,39 +1,95 @@
-import 'dotenv/config'
+import mqtt from 'mqtt';
 import express, { application } from 'express'
-import cors from 'cors'
-import mqtt from 'mqtt'
+import { PrismaClient } from '@prisma/client';
 
 const app = express()
 
-app.use(express.json())
-app.use(cors({
-    origin: process.env.CLIENT_ADDRESS,
-    credentials: true
-}))
+const prisma = new PrismaClient();
+const brokerUrl = 'mqtt://test.mosquitto.org:1883';
+const topic = 'fatec/api/4dsm/sintax/';
 
-const mqttClient = mqtt.connect(process.env.BROKER_ADDRESS)
+console.log('Iniciando subscriber...');
 
-mqttClient.on('connect', () => {
-    console.log('Connected to the broker')
+console.log(`Conectando ao broker MQTT em ${brokerUrl}...`);
+const client = mqtt.connect(brokerUrl);
 
-    // TODO: mudar para o endereço correto do tópico
-    mqttClient.subscribe('uri/topic', (err) => {
-        if (!err) {
-            console.log('Subscribed to the topic')
-        } else {
-            console.error(err)
-        }
-    })
-})
+client.on('connect', () => {
+  console.log('Conectado ao MQTT com sucesso!');
+  
+  client.subscribe(topic, (err) => {
+    if (!err) {
+      console.log(`Inscrito no tópico: ${topic}`);
+    } else {
+      console.error('Erro ao se inscrever:', err);
+    }
+  });
+});
 
-mqttClient.on('data', (_, data) => {
-    // TODO: salvar os dados no mongo
-    console.log(`Received data: ${data.toString()}`)
-})
+client.on('message', async (receivedTopic, payload) => {
+  const messageString = payload.toString();
+  console.log(`Mensagem recebida: ${receivedTopic} - ${messageString}`);
+  
+  try {
+    const data = JSON.parse(messageString);
 
-// Rota para retornar os dados salvos
-app.get('/api/weather-data', (req, res) => {
-    // TODO: retornar os dados do mongo
-})
+    const uid = data.uid;
+    const uxt = data.uxt;
+
+    if (!uid || uxt == null) {
+      console.warn('-> Mensagem com formato inválido (sem UID ou UXT). Descartando:', messageString);
+      return;
+    }
+
+    delete data.uid;
+    delete data.uxt;
+    
+    const newSensorData = await prisma.sensorData.create({
+      data: {
+        uid: uid,
+        uxt: uxt,
+        readings: data,
+      },
+    });
+
+    console.log(`-> Dados [${newSensorData.uid}] salvos. Campos dinâmicos: ${Object.keys(data).join(', ')}`);
+
+  } catch (e) {
+    if (e instanceof SyntaxError) {
+      console.error('Erro: Payload recebido não é um JSON válido:', messageString);
+    } else {
+      console.error('Erro ao processar ou salvar mensagem no banco:', e);
+    }
+  }
+});
+
+client.on('error', (err) => {
+  console.error('Erro de conexão MQTT:', err);
+  client.end();
+});
+
+client.on('close', () => {
+  console.log('Conexão MQTT fechada.');
+});
+
+client.on('offline', () => {
+  console.log('Cliente MQTT está offline.');
+});
+
+console.log('Subscriber em execução (aguardando conexão e mensagens)...');
+
+async function gracefulShutdown() {
+  console.log('\nRecebido sinal de interrupção. Desconectando...');
+  
+  await prisma.$disconnect();
+  console.log('Desconectado do MongoDB.');
+  
+  client.end(true, () => {
+    console.log('Desconectado do MQTT.');
+    process.exit(0);
+  });
+}
+
+process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', gracefulShutdown);
 
 export default app

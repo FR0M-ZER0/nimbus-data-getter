@@ -1,4 +1,4 @@
-import app from './src/index.js'
+import app from './src/app.js'
 const PORT = 3003
 
 app.listen(PORT, () => {
