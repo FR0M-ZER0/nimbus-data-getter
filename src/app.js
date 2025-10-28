@@ -11,6 +11,7 @@ const topic = 'fatec/api/4dsm/sintax/';
 
 const WS_URL = process.env.WS_URL
 const ws = new WebSocket(WS_URL)
+const  API_URL = process.env.API_URL
 
 function sendWsMessage(message) {
   if (ws.readyState === WebSocket.OPEN) {
@@ -19,6 +20,10 @@ function sendWsMessage(message) {
     console.warn('WebSocket não está pronto, ignorando envio...');
   }
 }
+
+const lastSeen = new Map()
+const CHECK_INTERVAL = 15000
+const TIMEOUT_OFFLINE = 30000
 
 console.log('Iniciando subscriber...');
 
@@ -36,6 +41,46 @@ client.on('connect', () => {
     }
   });
 });
+
+async function checkStatus() {
+  const now = Date.now();
+  for (const [uid, lastTime] of lastSeen.entries()) {
+    const status = now - lastTime > TIMEOUT_OFFLINE ? 'OFFLINE' : 'ONLINE';
+    const statusMessage = {
+      type: 'STATUS_UPDATE',
+      estacaoStatus: {
+        id_estacao: uid,
+        status,
+        created_at: new Date().toISOString(),
+      },
+    };
+    sendWsMessage(statusMessage);
+
+    const body = {
+      id_estacao: uid,
+      status: status,
+    };
+
+    try {
+      const response = await fetch(`${API_URL}/station-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (response.ok) {
+        console.log(`Enviado status para API com sucesso.`);
+      } else {
+        const errorText = await response.text();
+        console.error(`Falha ao enviar status: ${response.status} - ${errorText}`);
+      }
+    } catch (httpErr) {
+      console.error('Erro ao enviar status para API:', httpErr.message);
+    }
+  }
+}
+
+setInterval(checkStatus, CHECK_INTERVAL)
 
 client.on('message', async (receivedTopic, payload) => {
   const bytesReceived = payload.length;
@@ -81,15 +126,13 @@ client.on('message', async (receivedTopic, payload) => {
 
     console.log(`-> Dados [${newSensorData.uid}] salvos. Campos dinâmicos: ${Object.keys(data).join(', ')}`);
 
-    const  API_URL = process.env.API_URL
-
     const body = {
       id_estacao: uid,
-      data_sent: parseFloat(kilobytes.toFixed(2)),
+      data_sent: Math.max(1, Math.ceil(kilobytes)),
     };
 
     try {
-      const response = await fetch(API_URL, {
+      const response = await fetch(`${API_URL}/station-log`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
