@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "vitest run --coverage --reporter=junit --outputFile=./test-results.xml --environment=jsdom"
+    "test": "vitest run --coverage --reporter=junit --outputFile=./test-results.xml --environment=node"
   },
   "keywords": [],
   "author": "",
