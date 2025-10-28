@@ -1,19 +1,36 @@
-FROM node:latest AS build
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-COPY package.json ./
+COPY package.json package-lock.json ./
 
-RUN npm install
+
+RUN npm ci
+
 
 COPY . .
 
+
+RUN npx prisma generate
+
+
 RUN npm run build --if-present
 
-FROM nginx:alpine
 
-COPY --from=build /app/dist /usr/share/nginx/html/build
+FROM node:20-alpine AS production
 
-EXPOSE 80
+WORKDIR /app
 
-CMD ["nginx","-g","daemon off;"]
+
+COPY package.json package-lock.json ./
+
+
+RUN npm ci --omit=dev
+
+
+COPY --from=builder /app .
+
+
+EXPOSE 8080
+
+CMD [ "npm", "run", "start" ]
