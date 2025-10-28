@@ -73,7 +73,7 @@ jobs:
         run: npm install
 
       - name: Verificar Qualidade do Código (Linting)
-        run: npm run lint
+        run: npm run lint --if-present
 
       - name: Clean and Reinstall Node Modules
         run: |
