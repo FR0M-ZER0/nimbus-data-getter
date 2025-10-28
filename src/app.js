@@ -1,12 +1,24 @@
 import mqtt from 'mqtt';
 import express, { application } from 'express'
 import { PrismaClient } from '@prisma/client';
+import WebSocket from 'ws';
 
 const app = express()
 
 const prisma = new PrismaClient();
 const brokerUrl = 'mqtt://test.mosquitto.org:1883';
 const topic = 'fatec/api/4dsm/sintax/';
+
+const WS_URL = process.env.WS_URL
+const ws = new WebSocket(WS_URL)
+
+function sendWsMessage(message) {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(message));
+  } else {
+    console.warn('WebSocket não está pronto, ignorando envio...');
+  }
+}
 
 console.log('Iniciando subscriber...');
 
@@ -26,6 +38,9 @@ client.on('connect', () => {
 });
 
 client.on('message', async (receivedTopic, payload) => {
+  const bytesReceived = payload.length;
+  const kilobytes = bytesReceived / 1024;
+
   const messageString = payload.toString();
   console.log(`Mensagem recebida: ${receivedTopic} - ${messageString}`);
   
@@ -50,6 +65,19 @@ client.on('message', async (receivedTopic, payload) => {
         readings: data,
       },
     });
+
+    const timestamp = new Date().toISOString();
+
+    const logMessage = {
+      type: 'LOG_UPDATE',
+      estacaoLog: {
+        id_estacao: uid,
+        data_sent: parseFloat(kilobytes.toFixed(2)),
+        created_at: timestamp
+      }
+    };
+
+    sendWsMessage(logMessage);
 
     console.log(`-> Dados [${newSensorData.uid}] salvos. Campos dinâmicos: ${Object.keys(data).join(', ')}`);
 
