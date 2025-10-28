@@ -81,6 +81,30 @@ client.on('message', async (receivedTopic, payload) => {
 
     console.log(`-> Dados [${newSensorData.uid}] salvos. Campos dinâmicos: ${Object.keys(data).join(', ')}`);
 
+    const  API_URL = process.env.API_URL
+
+    const body = {
+      id_estacao: uid,
+      data_sent: parseFloat(kilobytes.toFixed(2)),
+    };
+
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (response.ok) {
+        console.log(`📤 Enviado log para API (${body.data_sent} bytes) com sucesso.`);
+      } else {
+        const errorText = await response.text();
+        console.error(`❌ Falha ao enviar log: ${response.status} - ${errorText}`);
+      }
+    } catch (httpErr) {
+      console.error('🌐 Erro ao enviar log para API:', httpErr.message);
+    }
+
   } catch (e) {
     if (e instanceof SyntaxError) {
       console.error('Erro: Payload recebido não é um JSON válido:', messageString);
