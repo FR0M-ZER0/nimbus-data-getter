@@ -6,7 +6,7 @@ import WebSocket from 'ws';
 const app = express()
 
 const prisma = new PrismaClient();
-const brokerUrl = 'mqtt://test.mosquitto.org:1883';
+const brokerUrl = 'mqtt://broker.hivemq.com:1883';
 const topic = 'fatec/api/4dsm/sintax/';
 
 const WS_URL = process.env.WS_URL
